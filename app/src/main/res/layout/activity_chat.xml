@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg">
+
+    <WebView
+        android:id="@+id/webView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <ProgressBar
+        android:id="@+id/loading"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:indeterminateTint="@color/accent" />
+
+    <LinearLayout
+        android:id="@+id/controls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginBottom="18dp"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
+
+        <!-- アーカイブ用の操作盤 -->
+        <LinearLayout
+            android:id="@+id/replayPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="14dp"
+            android:layout_marginEnd="14dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/bg_panel"
+            android:elevation="10dp"
+            android:orientation="vertical"
+            android:paddingStart="18dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="18dp"
+            android:paddingBottom="16dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:letterSpacing="0.12"
+                    android:text="@string/replay_label"
+                    android:textColor="@color/accent"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+
+                <Space
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/btnSetTime"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_chip"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:paddingStart="14dp"
+                    android:paddingTop="7dp"
+                    android:paddingEnd="14dp"
+                    android:paddingBottom="7dp"
+                    android:text="@string/btn_set_time"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/clock"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:fontFamily="monospace"
+                android:text="@string/clock_zero"
+                android:textColor="@color/textPrimary"
+                android:textSize="34sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/btnBackLarge"
+                    style="@style/TransportButton"
+                    android:text="@string/symbol_back_large" />
+
+                <TextView
+                    android:id="@+id/btnBackSmall"
+                    style="@style/TransportButton"
+                    android:text="@string/symbol_back_small" />
+
+                <TextView
+                    android:id="@+id/btnPlayPause"
+                    style="@style/TransportPrimary"
+                    android:text="@string/symbol_play" />
+
+                <TextView
+                    android:id="@+id/btnFwdSmall"
+                    style="@style/TransportButton"
+                    android:text="@string/symbol_fwd_small" />
+
+                <TextView
+                    android:id="@+id/btnFwdLarge"
+                    style="@style/TransportButton"
+                    android:text="@string/symbol_fwd_large" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:lineSpacingExtra="3dp"
+                android:text="@string/replay_hint"
+                android:textColor="@color/textSecondary"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- 常設の操作バー -->
+        <LinearLayout
+            android:id="@+id/bar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_bar"
+            android:elevation="10dp"
+            android:orientation="horizontal"
+            android:paddingStart="5dp"
+            android:paddingEnd="5dp">
+
+            <TextView
+                android:id="@+id/btnZoomOut"
+                style="@style/BarButton"
+                android:text="@string/symbol_zoom_out" />
+
+            <TextView
+                android:id="@+id/btnZoomIn"
+                style="@style/BarButton"
+                android:text="@string/symbol_zoom_in" />
+
+            <TextView
+                android:id="@+id/btnReplay"
+                style="@style/BarButton"
+                android:text="@string/symbol_replay" />
+
+            <TextView
+                android:id="@+id/btnReload"
+                style="@style/BarButton"
+                android:text="@string/symbol_reload" />
+
+            <TextView
+                android:id="@+id/btnDark"
+                style="@style/BarButton"
+                android:text="@string/symbol_dark" />
+
+            <TextView
+                android:id="@+id/btnCompact"
+                style="@style/BarButton"
+                android:text="@string/symbol_compact" />
+
+            <TextView
+                android:id="@+id/btnBrowser"
+                style="@style/BarButton"
+                android:text="@string/symbol_browser" />
+
+            <TextView
+                android:id="@+id/btnHideBar"
+                style="@style/BarButton"
+                android:text="@string/symbol_hide" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/grip"
+        android:layout_width="46dp"
+        android:layout_height="46dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="14dp"
+        android:layout_marginBottom="18dp"
+        android:background="@drawable/bg_grip"
+        android:clickable="true"
+        android:elevation="10dp"
+        android:focusable="true"
+        android:gravity="center"
+        android:text="@string/symbol_grip"
+        android:textColor="@color/textPrimary"
+        android:textSize="18sp"
+        android:visibility="gone" />
+</FrameLayout>

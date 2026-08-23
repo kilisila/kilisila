@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">コメントディスプレイ</string>
+    <string name="chat_title">ライブチャット</string>
+    <string name="brand_kicker">SECOND SCREEN FOR YOUTUBE CHAT</string>
+
+    <string name="main_description">テレビで配信を見ながら、手元にコメント欄だけを大きく表示します。アーカイブは時刻を合わせて追従させられます。</string>
+    <string name="input_hint">配信のURLまたは動画ID</string>
+
+    <string name="mode_label">モード</string>
+    <string name="mode_live">ライブ</string>
+    <string name="mode_replay">アーカイブ</string>
+
+    <string name="btn_open">コメント欄を開く</string>
+    <string name="btn_paste">クリップボードから貼り付けて開く</string>
+    <string name="btn_clear_recents">すべて消す</string>
+    <string name="btn_set_time">時刻を入力</string>
+    <string name="btn_apply">合わせる</string>
+    <string name="btn_cancel">キャンセル</string>
+
+    <string name="recent_header">最近見た配信</string>
+    <string name="recent_empty">まだ履歴はありません。\nYouTubeアプリの共有からこのアプリを選ぶのが一番手軽です。</string>
+    <string name="recent_subtitle">%1$s ・ %2$s</string>
+    <string name="badge_live">LIVE</string>
+    <string name="badge_replay">ARCHIVE</string>
+
+    <string name="main_tips">使い方\n・YouTubeアプリの「共有」からこのアプリを選ぶと、URLを貼らずに開けます。\n・ライブは自動で流れます。アーカイブは操作盤でテレビ側の再生時間を入力してから再生してください。\n・ずれたら −10 や +10 で少しずつ詰められます。\n・表示中は画面が自動消灯しません。バーを隠すと全画面になります。</string>
+
+    <string name="replay_label">ARCHIVE SYNC</string>
+    <string name="clock_zero">00:00:00</string>
+    <string name="replay_hint">テレビ側の再生時間を入力して「合わせる」を押すと、その位置からコメントが流れます。ずれたら −10 と +10 で調整してください。</string>
+
+    <string name="time_dialog_title">再生位置を合わせる</string>
+    <string name="time_dialog_message">テレビに表示されている再生時間を入力してください。</string>
+    <string name="time_hint">例 1:23:45 または 12:34 または 90</string>
+
+    <string name="msg_zoom">文字サイズ %1$d%%</string>
+    <string name="msg_compact_on">コンパクト表示：オン</string>
+    <string name="msg_compact_off">コンパクト表示：オフ</string>
+    <string name="msg_replay_on">アーカイブ同期：オン</string>
+    <string name="msg_replay_off">アーカイブ同期：オフ</string>
+
+    <string name="err_no_id">動画IDを読み取れませんでした。URLを確認してください。</string>
+    <string name="err_clipboard_empty">クリップボードが空です。</string>
+    <string name="err_no_browser">ブラウザを開けませんでした。</string>
+    <string name="err_bad_time">時刻の形式が正しくありません。</string>
+
+    <string name="symbol_zoom_out">A−</string>
+    <string name="symbol_zoom_in">A＋</string>
+    <string name="symbol_reload">↻</string>
+    <string name="symbol_dark">◐</string>
+    <string name="symbol_compact">▤</string>
+    <string name="symbol_browser">↗</string>
+    <string name="symbol_hide">✕</string>
+    <string name="symbol_grip">⋯</string>
+    <string name="symbol_remove">×</string>
+    <string name="symbol_replay">⏱</string>
+    <string name="symbol_play">▶</string>
+    <string name="symbol_pause">❚❚</string>
+    <string name="symbol_back_large">−60</string>
+    <string name="symbol_back_small">−10</string>
+    <string name="symbol_fwd_small">+10</string>
+    <string name="symbol_fwd_large">+60</string>
+</resources>

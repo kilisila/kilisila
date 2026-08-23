@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>チャット埋め込み判定</title>
+<style>
+  body { margin:0; background:#0B0B0F; color:#F1F1F5;
+         font-family:system-ui,sans-serif; }
+  header { padding:12px 16px; font-size:13px; line-height:1.6; }
+  code { color:#F03B52; word-break:break-all; }
+  iframe { width:100%; height:70vh; border:0; background:#15151C; }
+</style>
+</head>
+<body>
+
+<header>
+  <!--
+    使い方
+    1. 下の VIDEO_ID を「配信中」のライブ動画のIDに置き換える。
+       アーカイブや配信予定の動画では別の理由で表示されないため、判定にならない。
+    2. YOUR_DOMAIN を、このファイルを配置したドメインに完全一致させる。
+       例: GitHub Pages なら username.github.io
+       サブドメインまで含めて一致していないとチャットは開かない。
+    3. スマートフォンの Chrome でこのページを開く。
+
+    判定
+    - チャットが表示された   → Web アプリ方式が使える
+    - 枠が空白のまま         → モバイルウェブでは埋め込み不可。ネイティブ実装で進める
+  -->
+  チャットが表示されれば Web アプリ方式が使えます。空白のままならネイティブ実装で進めます。<br>
+  <code>VIDEO_ID</code> と <code>YOUR_DOMAIN</code> を書き換えてから開いてください。
+</header>
+
+<iframe
+  src="https://www.youtube.com/live_chat?v=VIDEO_ID&embed_domain=YOUR_DOMAIN"
+  title="YouTube ライブチャット"></iframe>
+
+</body>
+</html>
