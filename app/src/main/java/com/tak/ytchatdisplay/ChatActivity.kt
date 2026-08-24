@@ -11,6 +11,7 @@ import android.view.inputmethod.EditorInfo
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.EditText
@@ -21,6 +22,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.webkit.WebViewAssetLoader
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.tak.ytchatdisplay.databinding.ActivityChatBinding
 import org.json.JSONObject
@@ -52,11 +54,20 @@ class ChatActivity : AppCompatActivity() {
         private const val DESKTOP_UA =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) " +
                 "Chrome/125.0.0.0 Safari/537.36"
+
+        /**
+         * アーカイブのチャットリプレイは、ポップアウト単体では YouTube 側が提供して
+         * いない（実機検証済み）。視聴ページと同じ iframe + embed_domain の仕組みを
+         * 自前のラッパーページで再現し、その中に埋め込む。
+         */
+        private const val ASSET_DOMAIN = "appassets.androidplatform.net"
+        private const val REPLAY_WRAPPER_URL = "https://$ASSET_DOMAIN/assets/replay_chat.html"
     }
 
     private lateinit var binding: ActivityChatBinding
     private lateinit var prefs: Prefs
     private lateinit var replay: ReplaySync
+    private lateinit var assetLoader: WebViewAssetLoader
 
     private var videoId: String = ""
     private var replayMode: Boolean = false
@@ -107,6 +118,11 @@ class ChatActivity : AppCompatActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
+        assetLoader = WebViewAssetLoader.Builder()
+            .setDomain(ASSET_DOMAIN)
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
+
         val cookies = CookieManager.getInstance()
         cookies.setAcceptCookie(true)
         cookies.setAcceptThirdPartyCookies(binding.webView, true)
@@ -142,16 +158,28 @@ class ChatActivity : AppCompatActivity() {
                 }
             }
 
+            override fun shouldInterceptRequest(
+                view: WebView,
+                request: WebResourceRequest
+            ): WebResourceResponse? = assetLoader.shouldInterceptRequest(request.url)
+
             override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
                 pageReady = false
                 binding.loading.visibility = View.VISIBLE
             }
 
             override fun onPageFinished(view: WebView, url: String) {
-                pageReady = true
                 binding.loading.visibility = View.GONE
-                applyCss()
                 prefs.addRecent(videoId, cleanTitle(view.title), replayMode)
+
+                if (replayMode) {
+                    // アーカイブはポップアウト単体では提供されないため、視聴ページと同じ
+                    // iframe + embed_domain の構成をラッパーページ側で組み立てる
+                    setReplayIframeSrc()
+                } else {
+                    applyCss()
+                }
+                pageReady = true
 
                 if (replayMode) {
                     // 読み込み直後に現在位置を一度伝えて、表示を合わせる
@@ -187,10 +215,26 @@ class ChatActivity : AppCompatActivity() {
     }
 
     private fun load() {
+        if (replayMode) {
+            binding.webView.loadUrl(REPLAY_WRAPPER_URL)
+        } else {
+            val dark = if (prefs.darkTheme) "&dark_theme=1" else ""
+            binding.webView.loadUrl(
+                "https://www.youtube.com/live_chat?is_popout=1&v=$videoId$dark"
+            )
+        }
+    }
+
+    /**
+     * ラッパーページの iframe に、視聴ページと同じ形式のチャットURLを設定する。
+     * embed_domain には、このラッパーページ自身のオリジンを渡す。
+     */
+    private fun setReplayIframeSrc() {
         val dark = if (prefs.darkTheme) "&dark_theme=1" else ""
-        binding.webView.loadUrl(
-            "https://www.youtube.com/live_chat?is_popout=1&v=$videoId$dark"
-        )
+        val chatUrl =
+            "https://www.youtube.com/live_chat?v=$videoId&embed_domain=$ASSET_DOMAIN$dark"
+        val script = "document.getElementById('chat').src=" + JSONObject.quote(chatUrl) + ";"
+        binding.webView.evaluateJavascript(script, null)
     }
 
     /**
@@ -233,8 +277,10 @@ class ChatActivity : AppCompatActivity() {
               var payload = {"event":"infoDelivery",
                              "info":{"currentTime":$seconds,"playerState":$state},
                              "id":1};
-              try { window.postMessage(JSON.stringify(payload), "*"); } catch (e) {}
-              try { window.postMessage(payload, "*"); } catch (e) {}
+              var frame = document.getElementById('chat');
+              if (!frame || !frame.contentWindow) return;
+              try { frame.contentWindow.postMessage(JSON.stringify(payload), "*"); } catch (e) {}
+              try { frame.contentWindow.postMessage(payload, "*"); } catch (e) {}
             })();
         """.trimIndent()
 
@@ -313,6 +359,7 @@ class ChatActivity : AppCompatActivity() {
     }
 
     private fun applyReplayMode(enabled: Boolean, initial: Boolean) {
+        val modeChanged = !initial && enabled != replayMode
         replayMode = enabled
         binding.replayPanel.visibility = if (enabled) View.VISIBLE else View.GONE
         binding.btnReplay.alpha = if (enabled) 1f else 0.45f
@@ -323,9 +370,16 @@ class ChatActivity : AppCompatActivity() {
                 replay.seekTo(prefs.lastPosition(videoId))
             }
             binding.clock.text = TimeText.format(replay.positionMs)
-            pushPlayerTime(replay.positionMs, replay.playing)
         } else {
             replay.pause()
+        }
+
+        if (modeChanged) {
+            // ライブは直接読み込み、アーカイブは iframe ラッパー経由と構成が
+            // 異なるため、切り替え時は読み込み直す
+            load()
+        } else {
+            pushPlayerTime(replay.positionMs, replay.playing)
         }
 
         if (!initial) {
@@ -375,7 +429,8 @@ class ChatActivity : AppCompatActivity() {
     // ------------------------------------------------------------------ 補助
 
     private fun isChatUrl(url: String): Boolean =
-        url.contains("youtube.com/live_chat", ignoreCase = true)
+        url.contains("youtube.com/live_chat", ignoreCase = true) ||
+            url.startsWith("https://$ASSET_DOMAIN/", ignoreCase = true)
 
     private fun openExternally(url: String) {
         runCatching {
