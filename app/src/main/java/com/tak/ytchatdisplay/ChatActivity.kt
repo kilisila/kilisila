@@ -11,7 +11,6 @@ import android.view.inputmethod.EditorInfo
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.EditText
@@ -22,7 +21,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.webkit.WebViewAssetLoader
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.tak.ytchatdisplay.databinding.ActivityChatBinding
 import org.json.JSONObject
@@ -56,18 +54,38 @@ class ChatActivity : AppCompatActivity() {
                 "Chrome/125.0.0.0 Safari/537.36"
 
         /**
-         * アーカイブのチャットリプレイは、ポップアウト単体では YouTube 側が提供して
-         * いない（実機検証済み）。視聴ページと同じ iframe + embed_domain の仕組みを
-         * 自前のラッパーページで再現し、その中に埋め込む。
+         * アーカイブのチャットリプレイは、ポップアウト単体でも iframe + embed_domain
+         * の自前構成でも YouTube 側が受け付けないことが実機検証で判明した
+         * （継続トークンが必要な live_chat_replay エンドポイントを使っており、
+         * 動画IDだけからは組み立てられない）。視聴ページ自体を読み込み、
+         * チャット欄以外を非表示にする方式に切り替える。
          */
-        private const val ASSET_DOMAIN = "appassets.androidplatform.net"
-        private const val REPLAY_WRAPPER_URL = "https://$ASSET_DOMAIN/assets/replay_chat.html"
+        private const val REPLAY_HIDE_CSS = """
+            #masthead-container, #guide, tp-yt-app-drawer { display:none !important; }
+            #primary {
+              position:fixed !important; left:0 !important; top:0 !important;
+              width:1px !important; height:1px !important;
+              opacity:0 !important; overflow:hidden !important; pointer-events:none !important;
+            }
+            #secondary {
+              position:fixed !important; top:0 !important; left:0 !important;
+              right:0 !important; bottom:0 !important;
+              width:100% !important; height:100% !important;
+              margin:0 !important; padding:0 !important; z-index:2147483647 !important;
+              background:#0b0b0f !important;
+            }
+            #secondary > *:not(ytd-live-chat-frame) { display:none !important; }
+            ytd-live-chat-frame#chat {
+              position:fixed !important; top:0 !important; left:0 !important;
+              right:0 !important; bottom:0 !important;
+              width:100% !important; height:100% !important;
+            }
+        """
     }
 
     private lateinit var binding: ActivityChatBinding
     private lateinit var prefs: Prefs
     private lateinit var replay: ReplaySync
-    private lateinit var assetLoader: WebViewAssetLoader
 
     private var videoId: String = ""
     private var replayMode: Boolean = false
@@ -118,11 +136,6 @@ class ChatActivity : AppCompatActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
-        assetLoader = WebViewAssetLoader.Builder()
-            .setDomain(ASSET_DOMAIN)
-            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
-            .build()
-
         val cookies = CookieManager.getInstance()
         cookies.setAcceptCookie(true)
         cookies.setAcceptThirdPartyCookies(binding.webView, true)
@@ -158,11 +171,6 @@ class ChatActivity : AppCompatActivity() {
                 }
             }
 
-            override fun shouldInterceptRequest(
-                view: WebView,
-                request: WebResourceRequest
-            ): WebResourceResponse? = assetLoader.shouldInterceptRequest(request.url)
-
             override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
                 pageReady = false
                 binding.loading.visibility = View.VISIBLE
@@ -173,12 +181,11 @@ class ChatActivity : AppCompatActivity() {
                 prefs.addRecent(videoId, cleanTitle(view.title), replayMode)
 
                 if (replayMode) {
-                    // アーカイブはポップアウト単体では提供されないため、視聴ページと同じ
-                    // iframe + embed_domain の構成をラッパーページ側で組み立てる
-                    setReplayIframeSrc()
-                } else {
-                    applyCss()
+                    // 視聴ページを読み込んでいるので、チャット欄以外を隠し、
+                    // 動画は消音・非表示のまま自前で操作する
+                    setupReplayWatchPage()
                 }
+                applyCss()
                 pageReady = true
 
                 if (replayMode) {
@@ -216,8 +223,11 @@ class ChatActivity : AppCompatActivity() {
 
     private fun load() {
         if (replayMode) {
-            binding.webView.loadUrl(REPLAY_WRAPPER_URL)
+            // JS からの seekTo()/playVideo() 呼び出しを自動再生ブロックさせない
+            binding.webView.settings.mediaPlaybackRequiresUserGesture = false
+            binding.webView.loadUrl("https://www.youtube.com/watch?v=$videoId")
         } else {
+            binding.webView.settings.mediaPlaybackRequiresUserGesture = true
             val dark = if (prefs.darkTheme) "&dark_theme=1" else ""
             binding.webView.loadUrl(
                 "https://www.youtube.com/live_chat?is_popout=1&v=$videoId$dark"
@@ -226,14 +236,36 @@ class ChatActivity : AppCompatActivity() {
     }
 
     /**
-     * ラッパーページの iframe に、視聴ページと同じ形式のチャットURLを設定する。
-     * embed_domain には、このラッパーページ自身のオリジンを渡す。
+     * 視聴ページのうち、チャット欄以外を隠し、動画プレイヤーを消音する。
+     * チャットのiframe自体は動画プレイヤーと同一オリジンで読み込まれるため、
+     * こちら側から要素を隠すだけで済む。
      */
-    private fun setReplayIframeSrc() {
-        val dark = if (prefs.darkTheme) "&dark_theme=1" else ""
-        val chatUrl =
-            "https://www.youtube.com/live_chat?v=$videoId&embed_domain=$ASSET_DOMAIN$dark"
-        val script = "document.getElementById('chat').src=" + JSONObject.quote(chatUrl) + ";"
+    private fun setupReplayWatchPage() {
+        val hideCss = JSONObject.quote(REPLAY_HIDE_CSS)
+        val script = """
+            (function(){
+              var s = document.getElementById('ytcd-hide-style');
+              if (!s) {
+                s = document.createElement('style');
+                s.id = 'ytcd-hide-style';
+                document.documentElement.appendChild(s);
+              }
+              s.textContent = $hideCss;
+
+              var tries = 0;
+              var timer = setInterval(function(){
+                tries++;
+                var p = document.getElementById('movie_player');
+                if (p) {
+                  try {
+                    if (typeof p.mute === 'function') p.mute();
+                    if (typeof p.pauseVideo === 'function') p.pauseVideo();
+                  } catch (e) {}
+                }
+                if (tries > 20) clearInterval(timer);
+              }, 300);
+            })();
+        """.trimIndent()
         binding.webView.evaluateJavascript(script, null)
     }
 
@@ -252,35 +284,69 @@ class ChatActivity : AppCompatActivity() {
             }
         }
 
-        val script = "(function(){" +
-            "var s=document.getElementById('ytcd-style');" +
-            "if(!s){s=document.createElement('style');s.id='ytcd-style';" +
-            "document.documentElement.appendChild(s);}" +
-            "s.textContent=" + JSONObject.quote(css) + ";" +
-            "})();"
+        val cssJson = JSONObject.quote(css)
+
+        // ライブはチャットページそのものがトップ文書。アーカイブは視聴ページに
+        // 埋め込まれた同一オリジンの iframe の中にチャットがあるため、
+        // そちらの文書を探して注入する（読み込みが遅れることがあるので少し待つ）。
+        val script = if (replayMode) {
+            """
+            (function(){
+              var tries = 0;
+              var timer = setInterval(function(){
+                tries++;
+                var frame = document.querySelector('ytd-live-chat-frame iframe');
+                var doc = frame && frame.contentDocument;
+                if (doc && doc.documentElement) {
+                  var s = doc.getElementById('ytcd-style');
+                  if (!s) { s = doc.createElement('style'); s.id = 'ytcd-style'; doc.documentElement.appendChild(s); }
+                  s.textContent = $cssJson;
+                  clearInterval(timer);
+                }
+                if (tries > 20) clearInterval(timer);
+              }, 300);
+            })();
+            """.trimIndent()
+        } else {
+            """
+            (function(){
+              var s = document.getElementById('ytcd-style');
+              if (!s) { s = document.createElement('style'); s.id = 'ytcd-style'; document.documentElement.appendChild(s); }
+              s.textContent = $cssJson;
+            })();
+            """.trimIndent()
+        }
 
         binding.webView.evaluateJavascript(script, null)
     }
 
     /**
-     * チャットのリプレイ表示は、動画プレイヤーから送られる再生位置の通知を見て進む。
-     * ここでは同じ形式の通知を自前で送り、テレビ側の再生位置に合わせて表示させる。
+     * チャットのリプレイ表示は、視聴ページに埋め込まれた本物の動画プレイヤーの
+     * 再生位置を見て進む。ここでは仮想再生時計の値に合わせて、消音・非表示に
+     * した本物のプレイヤーを直接操作する（毎回シークすると引っかかるため、
+     * 大きくずれている時だけ補正する）。
      */
     private fun pushPlayerTime(positionMs: Long, playing: Boolean) {
         if (!replayMode || !pageReady) return
 
         val seconds = positionMs / 1000.0
-        val state = if (playing) 1 else 2
 
         val script = """
             (function(){
-              var payload = {"event":"infoDelivery",
-                             "info":{"currentTime":$seconds,"playerState":$state},
-                             "id":1};
-              var frame = document.getElementById('chat');
-              if (!frame || !frame.contentWindow) return;
-              try { frame.contentWindow.postMessage(JSON.stringify(payload), "*"); } catch (e) {}
-              try { frame.contentWindow.postMessage(payload, "*"); } catch (e) {}
+              var p = document.getElementById('movie_player');
+              if (!p) return;
+              try {
+                if (typeof p.mute === 'function') p.mute();
+                var current = (typeof p.getCurrentTime === 'function') ? p.getCurrentTime() : null;
+                if (current === null || Math.abs(current - $seconds) > 1.5) {
+                  if (typeof p.seekTo === 'function') p.seekTo($seconds, true);
+                }
+                if ($playing) {
+                  if (typeof p.playVideo === 'function') p.playVideo();
+                } else {
+                  if (typeof p.pauseVideo === 'function') p.pauseVideo();
+                }
+              } catch (e) {}
             })();
         """.trimIndent()
 
@@ -375,7 +441,7 @@ class ChatActivity : AppCompatActivity() {
         }
 
         if (modeChanged) {
-            // ライブは直接読み込み、アーカイブは iframe ラッパー経由と構成が
+            // ライブはポップアウト直読み、アーカイブは視聴ページ読み込みと構成が
             // 異なるため、切り替え時は読み込み直す
             load()
         } else {
@@ -430,7 +496,7 @@ class ChatActivity : AppCompatActivity() {
 
     private fun isChatUrl(url: String): Boolean =
         url.contains("youtube.com/live_chat", ignoreCase = true) ||
-            url.startsWith("https://$ASSET_DOMAIN/", ignoreCase = true)
+            url.contains("youtube.com/watch", ignoreCase = true)
 
     private fun openExternally(url: String) {
         runCatching {
