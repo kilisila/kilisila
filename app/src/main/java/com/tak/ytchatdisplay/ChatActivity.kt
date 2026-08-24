@@ -57,55 +57,39 @@ class ChatActivity : AppCompatActivity() {
          * アーカイブのチャットリプレイは、ポップアウト単体でも iframe + embed_domain
          * の自前構成でも YouTube 側が受け付けないことが実機検証で判明した
          * （継続トークンが必要な live_chat_replay エンドポイントを使っており、
-         * 動画IDだけからは組み立てられない）。視聴ページ自体を読み込み、
-         * チャット欄以外を非表示にする方式に切り替える。
+         * 動画IDだけからは組み立てられない）。
          *
-         * 視聴ページのレイアウトは Shadow DOM の中にあることが多く、外側から
-         * ID名を決め打ちした <style> では届かないおそれがある。そのため、
-         * 実在が確認できている ytd-live-chat-frame と movie_player の2要素を
-         * 起点に祖先をたどり、兄弟要素へ直接 inline style を当てる
-         * （呼び出し側で var f = REPLAY_ISOLATE_JS; f() として使う関数式）。
+         * そこで、視聴ページを裏で一瞬だけ読み込み、そこに埋め込まれる
+         * チャット用 iframe の src（継続トークン付きの本物のURL）を取り出したら、
+         * 視聴ページ（動画本体・広告を含む）は即座に捨てて、そのURLだけを
+         * トップレベルで読み込み直す。ライブと同じく、チャットだけの軽いページに
+         * なるので、動画を隠す必要も動画広告の再生も避けられる。
          */
-        private const val REPLAY_ISOLATE_JS = """
-            function(){
-              function important(el, props) {
-                for (var k in props) { el.style.setProperty(k, props[k], 'important'); }
-              }
-              var chat = document.querySelector('ytd-live-chat-frame');
-              var player = document.getElementById('movie_player');
-              if (!chat) return false;
-
-              important(chat, {
-                position: 'fixed', top: '0', left: '0', right: '0', bottom: '0',
-                width: '100%', height: '100%', 'z-index': '2147483647',
-                background: '#0b0b0f'
-              });
-
-              var node = chat;
-              while (node && node !== document.documentElement) {
-                var parent = node.parentElement;
-                if (!parent) break;
-                Array.prototype.forEach.call(parent.children, function (sibling) {
-                  if (sibling === node) return;
-                  if (player && sibling.contains(player)) {
-                    // 動画プレイヤーを含む枝は display:none にすると
-                    // 自動一時停止されるおそれがあるため、極小・透明化に留める
-                    important(sibling, {
-                      position: 'fixed', top: '0', left: '0',
-                      width: '1px', height: '1px', opacity: '0',
-                      overflow: 'hidden', 'pointer-events': 'none', 'z-index': '-1'
-                    });
-                  } else {
-                    sibling.style.setProperty('display', 'none', 'important');
-                  }
-                });
-                important(parent, { margin: '0', padding: '0' });
-                node = parent;
-              }
-              document.documentElement.style.setProperty('background', '#0b0b0f', 'important');
-              document.body.style.setProperty('background', '#0b0b0f', 'important');
-              return true;
-            }
+        private const val REPLAY_BOOTSTRAP_JS = """
+            (function(){
+              var tries = 0;
+              var timer = setInterval(function(){
+                tries++;
+                var p = document.getElementById('movie_player');
+                if (p) {
+                  try {
+                    if (typeof p.mute === 'function') p.mute();
+                    if (typeof p.pauseVideo === 'function') p.pauseVideo();
+                  } catch (e) {}
+                }
+                var frame = document.querySelector('ytd-live-chat-frame iframe');
+                var src = frame && frame.src;
+                if (src && src.indexOf('continuation=') !== -1) {
+                  clearInterval(timer);
+                  if (window.AndroidBridge) { window.AndroidBridge.onContinuationFound(src); }
+                  return;
+                }
+                if (tries > 40) {
+                  clearInterval(timer);
+                  if (window.AndroidBridge) { window.AndroidBridge.onContinuationNotFound(); }
+                }
+              }, 250);
+            })();
         """
     }
 
@@ -203,14 +187,17 @@ class ChatActivity : AppCompatActivity() {
             }
 
             override fun onPageFinished(view: WebView, url: String) {
-                binding.loading.visibility = View.GONE
                 prefs.addRecent(videoId, cleanTitle(view.title), replayMode)
 
-                if (replayMode) {
-                    // 視聴ページを読み込んでいるので、チャット欄以外を隠し、
-                    // 動画は消音・非表示のまま自前で操作する
-                    setupReplayWatchPage()
+                if (replayMode && url.contains("youtube.com/watch", ignoreCase = true)) {
+                    // ブートストラップ段階。動画・広告はまだ画面に出していないので
+                    // ローディング表示は継続したまま、継続トークンの取得だけ進める
+                    binding.webView.evaluateJavascript(REPLAY_BOOTSTRAP_JS, null)
+                    return
                 }
+
+                binding.loading.visibility = View.GONE
+                binding.webView.visibility = View.VISIBLE
                 applyCss()
                 pageReady = true
 
@@ -245,47 +232,41 @@ class ChatActivity : AppCompatActivity() {
                 return true
             }
         }
+
+        binding.webView.addJavascriptInterface(ReplayBridge(), "AndroidBridge")
+    }
+
+    /**
+     * 視聴ページ側のJSから、継続トークン付きチャットURLの取得結果を受け取る橋渡し。
+     * 動画本体（と広告）を見せないよう、見つかるまでWebViewは非表示のままにする。
+     */
+    private inner class ReplayBridge {
+        @android.webkit.JavascriptInterface
+        fun onContinuationFound(url: String) {
+            runOnUiThread { binding.webView.loadUrl(url) }
+        }
+
+        @android.webkit.JavascriptInterface
+        fun onContinuationNotFound() {
+            runOnUiThread {
+                binding.loading.visibility = View.GONE
+                toast(getString(R.string.err_no_chat_replay))
+            }
+        }
     }
 
     private fun load() {
         if (replayMode) {
-            // JS からの seekTo()/playVideo() 呼び出しを自動再生ブロックさせない
-            binding.webView.settings.mediaPlaybackRequiresUserGesture = false
+            // 継続トークンを取り出すまで、動画（と広告）を画面に出さない
+            binding.webView.visibility = View.INVISIBLE
             binding.webView.loadUrl("https://www.youtube.com/watch?v=$videoId")
         } else {
-            binding.webView.settings.mediaPlaybackRequiresUserGesture = true
+            binding.webView.visibility = View.VISIBLE
             val dark = if (prefs.darkTheme) "&dark_theme=1" else ""
             binding.webView.loadUrl(
                 "https://www.youtube.com/live_chat?is_popout=1&v=$videoId$dark"
             )
         }
-    }
-
-    /**
-     * 視聴ページのうち、チャット欄以外を隠し、動画プレイヤーを消音する。
-     * DOM構造の変化に備え、要素が見つかるまで一定間隔で再試行する。
-     */
-    private fun setupReplayWatchPage() {
-        val script = """
-            (function(){
-              var isolate = $REPLAY_ISOLATE_JS;
-              var tries = 0;
-              var timer = setInterval(function(){
-                tries++;
-                var isolated = false;
-                try { isolated = isolate(); } catch (e) {}
-                var p = document.getElementById('movie_player');
-                if (p) {
-                  try {
-                    if (typeof p.mute === 'function') p.mute();
-                    if (typeof p.pauseVideo === 'function') p.pauseVideo();
-                  } catch (e) {}
-                }
-                if ((isolated && p) || tries > 30) clearInterval(timer);
-              }, 300);
-            })();
-        """.trimIndent()
-        binding.webView.evaluateJavascript(script, null)
     }
 
     /**
@@ -303,69 +284,34 @@ class ChatActivity : AppCompatActivity() {
             }
         }
 
-        val cssJson = JSONObject.quote(css)
-
-        // ライブはチャットページそのものがトップ文書。アーカイブは視聴ページに
-        // 埋め込まれた同一オリジンの iframe の中にチャットがあるため、
-        // そちらの文書を探して注入する（読み込みが遅れることがあるので少し待つ）。
-        val script = if (replayMode) {
-            """
-            (function(){
-              var tries = 0;
-              var timer = setInterval(function(){
-                tries++;
-                var frame = document.querySelector('ytd-live-chat-frame iframe');
-                var doc = frame && frame.contentDocument;
-                if (doc && doc.documentElement) {
-                  var s = doc.getElementById('ytcd-style');
-                  if (!s) { s = doc.createElement('style'); s.id = 'ytcd-style'; doc.documentElement.appendChild(s); }
-                  s.textContent = $cssJson;
-                  clearInterval(timer);
-                }
-                if (tries > 20) clearInterval(timer);
-              }, 300);
-            })();
-            """.trimIndent()
-        } else {
-            """
-            (function(){
-              var s = document.getElementById('ytcd-style');
-              if (!s) { s = document.createElement('style'); s.id = 'ytcd-style'; document.documentElement.appendChild(s); }
-              s.textContent = $cssJson;
-            })();
-            """.trimIndent()
-        }
+        // ライブ・アーカイブとも、この時点ではチャットページ自体がトップ文書になっている
+        val script = "(function(){" +
+            "var s=document.getElementById('ytcd-style');" +
+            "if(!s){s=document.createElement('style');s.id='ytcd-style';" +
+            "document.documentElement.appendChild(s);}" +
+            "s.textContent=" + JSONObject.quote(css) + ";" +
+            "})();"
 
         binding.webView.evaluateJavascript(script, null)
     }
 
     /**
-     * チャットのリプレイ表示は、視聴ページに埋め込まれた本物の動画プレイヤーの
-     * 再生位置を見て進む。ここでは仮想再生時計の値に合わせて、消音・非表示に
-     * した本物のプレイヤーを直接操作する（毎回シークすると引っかかるため、
-     * 大きくずれている時だけ補正する）。
+     * チャットのリプレイ表示は、動画プレイヤーから送られる再生位置の通知を見て進む。
+     * ここでは同じ形式の通知を自前で送り、テレビ側の再生位置に合わせて表示させる。
      */
     private fun pushPlayerTime(positionMs: Long, playing: Boolean) {
         if (!replayMode || !pageReady) return
 
         val seconds = positionMs / 1000.0
+        val state = if (playing) 1 else 2
 
         val script = """
             (function(){
-              var p = document.getElementById('movie_player');
-              if (!p) return;
-              try {
-                if (typeof p.mute === 'function') p.mute();
-                var current = (typeof p.getCurrentTime === 'function') ? p.getCurrentTime() : null;
-                if (current === null || Math.abs(current - $seconds) > 1.5) {
-                  if (typeof p.seekTo === 'function') p.seekTo($seconds, true);
-                }
-                if ($playing) {
-                  if (typeof p.playVideo === 'function') p.playVideo();
-                } else {
-                  if (typeof p.pauseVideo === 'function') p.pauseVideo();
-                }
-              } catch (e) {}
+              var payload = {"event":"infoDelivery",
+                             "info":{"currentTime":$seconds,"playerState":$state},
+                             "id":1};
+              try { window.postMessage(JSON.stringify(payload), "*"); } catch (e) {}
+              try { window.postMessage(payload, "*"); } catch (e) {}
             })();
         """.trimIndent()
 

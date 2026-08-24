@@ -44,6 +44,7 @@
     <string name="err_clipboard_empty">クリップボードが空です。</string>
     <string name="err_no_browser">ブラウザを開けませんでした。</string>
     <string name="err_bad_time">時刻の形式が正しくありません。</string>
+    <string name="err_no_chat_replay">この動画のチャットリプレイを取得できませんでした。</string>
 
     <string name="symbol_zoom_out">A−</string>
     <string name="symbol_zoom_in">A＋</string>
