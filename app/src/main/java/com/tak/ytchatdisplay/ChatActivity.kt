@@ -284,10 +284,10 @@ class ChatActivity : AppCompatActivity() {
     private fun showControls(visible: Boolean) {
         binding.controls.visibility = if (visible) View.VISIBLE else View.GONE
         binding.grip.visibility = if (visible) View.GONE else View.VISIBLE
-        setImmersive(!visible)
+        applyImmersiveMode(!visible)
     }
 
-    private fun setImmersive(on: Boolean) {
+    private fun applyImmersiveMode(on: Boolean) {
         val controller = WindowCompat.getInsetsController(window, binding.root)
         if (on) {
             controller.systemBarsBehavior =

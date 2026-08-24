@@ -34,7 +34,7 @@ class VideoIdTest {
     }
 
     @Test
-    fun 動画IDを含まない入力は null を返す() {
+    fun `動画IDを含まない入力は null を返す`() {
         assertNull(VideoId.extract("https://www.youtube.com/@usadapekora/live"))
         assertNull(VideoId.extract("ただのテキスト"))
         assertNull(VideoId.extract("   "))

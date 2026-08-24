@@ -26,7 +26,7 @@ class TimeTextTest {
     }
 
     @Test
-    fun 不正な入力は null を返す() {
+    fun `不正な入力は null を返す`() {
         assertNull(TimeText.parse(""))
         assertNull(TimeText.parse("abc"))
         assertNull(TimeText.parse("12:xx"))
