@@ -84,7 +84,7 @@ class ChatActivity : AppCompatActivity() {
                   if (window.AndroidBridge) { window.AndroidBridge.onContinuationFound(src); }
                   return;
                 }
-                if (tries > 40) {
+                if (tries > 100) {
                   clearInterval(timer);
                   if (window.AndroidBridge) { window.AndroidBridge.onContinuationNotFound(); }
                 }
@@ -197,7 +197,7 @@ class ChatActivity : AppCompatActivity() {
                 }
 
                 binding.loading.visibility = View.GONE
-                binding.webView.visibility = View.VISIBLE
+                binding.webView.alpha = 1f
                 applyCss()
                 pageReady = true
 
@@ -250,6 +250,7 @@ class ChatActivity : AppCompatActivity() {
         fun onContinuationNotFound() {
             runOnUiThread {
                 binding.loading.visibility = View.GONE
+                binding.webView.alpha = 1f
                 toast(getString(R.string.err_no_chat_replay))
             }
         }
@@ -257,11 +258,13 @@ class ChatActivity : AppCompatActivity() {
 
     private fun load() {
         if (replayMode) {
-            // 継続トークンを取り出すまで、動画（と広告）を画面に出さない
-            binding.webView.visibility = View.INVISIBLE
+            // 継続トークンを取り出すまで、動画（と広告）を画面に出さない。
+            // View.INVISIBLE にすると端末（特にHyperOS）が描画・読み込みを
+            // 間引くことがあるため、表示状態は保ったまま透明にするだけに留める
+            binding.webView.alpha = 0f
             binding.webView.loadUrl("https://www.youtube.com/watch?v=$videoId")
         } else {
-            binding.webView.visibility = View.VISIBLE
+            binding.webView.alpha = 1f
             val dark = if (prefs.darkTheme) "&dark_theme=1" else ""
             binding.webView.loadUrl(
                 "https://www.youtube.com/live_chat?is_popout=1&v=$videoId$dark"
