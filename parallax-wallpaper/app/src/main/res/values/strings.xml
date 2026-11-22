@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">パララックス壁紙</string>
+    <string name="wallpaper_name">パララックス壁紙</string>
+    <string name="wallpaper_description">端末の傾きに合わせて 3 枚のレイヤーが異なる量で動き、奥行きを感じさせるライブ壁紙です。</string>
+
+    <string name="settings_title">パララックス壁紙の設定</string>
+    <string name="depth_label">奥行きの強さ</string>
+    <string name="depth_value_format">%.2f 倍</string>
+    <string name="depth_min_label">0.5 倍</string>
+    <string name="depth_max_label">2 倍</string>
+    <string name="depth_hint">変更はすぐに壁紙へ反映されます。</string>
+    <string name="set_wallpaper">ライブ壁紙に設定する</string>
+    <string name="picker_not_found">壁紙の選択画面を開けませんでした。端末の設定から壁紙を変更してください。</string>
+</resources>
